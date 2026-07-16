@@ -474,6 +474,7 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
   // reveal on scroll
   const revealEls = document.querySelectorAll('.reveal');
@@ -482,40 +483,56 @@
   }, {threshold:0.15});
   revealEls.forEach(el=>io.observe(el));
 
-  // ===== EmailJS config — fill these three in from your EmailJS dashboard =====
+  // ===== EmailJS config =====
   const EMAILJS_PUBLIC_KEY  = "dSBabtifSQ3USQXrb";
   const EMAILJS_SERVICE_ID  = "service_uek07mm";
   const EMAILJS_TEMPLATE_ID = "template_vi1mis3";
-  // =============================================================================
-
   emailjs.init(EMAILJS_PUBLIC_KEY);
+
+  // ===== Supabase config =====
+  const SUPABASE_URL = "https://ufksaccekypuohdosukm.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVma3NhY2Nla3lwdW9oZG9zdWttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTc1OTQsImV4cCI6MjA5OTY5MzU5NH0.0vZJWUIFdnUlrCVT3QQDI9nZ7ETHvQzZgET956909ic";
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const form = document.getElementById('briefForm');
   const status = document.getElementById('formStatus');
   const submitBtn = document.getElementById('submitBtn');
 
-  form.addEventListener('submit', function(e){
+  form.addEventListener('submit', async function(e){
     e.preventDefault();
     submitBtn.disabled = true;
     submitBtn.textContent = "Sending...";
     status.textContent = "";
     status.classList.remove('show','ok','err');
 
-    emailjs.sendForm(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, form)
-      .then(function(){
-        status.textContent = "Sent — I'll get back to you soon.";
-        status.classList.add('show','ok');
-        form.reset();
-      })
-      .catch(function(err){
-        status.textContent = "Something went wrong — please try again or email directly.";
-        status.classList.add('show','err');
-        console.error('EmailJS error:', err);
-      })
-      .finally(function(){
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Send brief →";
-      });
+    const formData = new FormData(form);
+    const payload = {
+      from_name: formData.get('from_name'),
+      phone: formData.get('phone'),
+      reply_to: formData.get('reply_to'),
+      project_type: formData.get('project_type'),
+      message: formData.get('message')
+    };
+
+    try {
+      // 1. Save permanently to Supabase (for the admin console)
+      const { error: dbError } = await supabaseClient.from('messages').insert([payload]);
+      if (dbError) throw dbError;
+
+      // 2. Send instant email notification via EmailJS
+      await emailjs.sendForm(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, form);
+
+      status.textContent = "Sent — I'll get back to you soon.";
+      status.classList.add('show','ok');
+      form.reset();
+    } catch (err) {
+      status.textContent = "Something went wrong — please try again or email directly.";
+      status.classList.add('show','err');
+      console.error('Submit error:', err);
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Send brief →";
+    }
   });
 </script>
 
